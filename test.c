@@ -5,6 +5,8 @@
 #include <libavutil/avutil.h>
 
 
+//gcc -o test test.c -lavutil -lavformat -lavcodec -lz -lavutil -lm
+
 #define USE_H264BSF 1
 
 
@@ -18,7 +20,7 @@ int main(int argc, char* argv[])
     int videoindex=-1, audioindex=-1;
     int frame_index=0;
 
-	const char *in_filename  = "test_input.flv";//Input file URL
+	const char *in_filename  = "rtmp://ali.wangxiao.eaydu.com/live_bak/x_100_rtc_test";//Input file URL
 	const char *out_filename_a = "test_output_audio.aac";
 
     av_register_all();
@@ -40,6 +42,9 @@ int main(int argc, char* argv[])
         ret = AVERROR_UNKNOWN;
         goto end;
     }
+
+
+	printf("Writing to %s\n", ofmt_ctx_v->filename);
 
     ofmt_v = ofmt_ctx_v->oformat;
 
@@ -110,7 +115,8 @@ int main(int argc, char* argv[])
 	}
 
 
-    AVBitStreamFilterContext* h264bsfc =  av_bitstream_filter_init("h264_mp4toannexb"); 
+    AVBitStreamFilterContext* h264bsfc =  av_bitstream_filter_init("h264_mp4toannexb");
+	AVBitStreamFilterContext* dumpextra = av_bitstream_filter_init("dump_extra");
 
 
     while (1)
@@ -128,9 +134,9 @@ int main(int argc, char* argv[])
             out_stream = ofmt_ctx_v->streams[0];
             ofmt_ctx = ofmt_ctx_v;
             printf("Write Video Packet. size:%d\tpts:%lld\n",pkt.size,pkt.pts);
-			usleep(50000);  // sleep for a while  
 #if USE_H264BSF
 			av_bitstream_filter_filter(h264bsfc, in_stream->codec, NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
+			av_bitstream_filter_filter(dumpextra, in_stream->codec, NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
 #endif
         } else if(pkt.stream_index == audioindex) {
             out_stream = ofmt_ctx_a->streams[0];
