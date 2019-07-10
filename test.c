@@ -20,6 +20,10 @@ int main(int argc, char* argv[])
     int videoindex=-1, audioindex=-1;
     int frame_index=0;
 
+	const char *out_filename_v = "test.h264";//Output file URL
+
+	FILE *fp_video=fopen(out_filename_v,"wb+");  
+
 	const char *in_filename  = "rtmp://ali.wangxiao.eaydu.com/live_bak/x_100_rtc_test";//Input file URL
 	const char *out_filename_a = "test_output_audio.aac";
 
@@ -37,7 +41,7 @@ int main(int argc, char* argv[])
 
     AVOutputFormat* fmt = av_guess_format("rtp", NULL, NULL);
 
-    avformat_alloc_output_context2(&ofmt_ctx_v, fmt, fmt->name, "rtp://127.0.0.1:5000/");
+    avformat_alloc_output_context2(&ofmt_ctx_v, fmt, fmt->name, "rtp://127.0.0.1:5000");
     if (!ofmt_ctx_v){
         ret = AVERROR_UNKNOWN;
         goto end;
@@ -115,6 +119,15 @@ int main(int argc, char* argv[])
 	}
 
 
+	char buf[200000];
+    AVFormatContext *ac[] = { ofmt_ctx_v };
+    av_sdp_create(ac, 1, buf, 20000);
+    printf("sdp:\n%s\n", buf);
+    FILE* fsdp = fopen("test.sdp", "w");
+    fprintf(fsdp, "%s", buf);
+    fclose(fsdp);
+
+
     AVBitStreamFilterContext* h264bsfc =  av_bitstream_filter_init("h264_mp4toannexb");
 	AVBitStreamFilterContext* dumpextra = av_bitstream_filter_init("dump_extra");
 
@@ -135,9 +148,12 @@ int main(int argc, char* argv[])
             ofmt_ctx = ofmt_ctx_v;
             printf("Write Video Packet. size:%d\tpts:%lld\n",pkt.size,pkt.pts);
 #if USE_H264BSF
-			av_bitstream_filter_filter(h264bsfc, in_stream->codec, NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
-			av_bitstream_filter_filter(dumpextra, in_stream->codec, NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
+			int nRet = 0;
+			int isKeyFrame = pkt.flags & AV_PKT_FLAG_KEY;
+			av_bitstream_filter_filter(h264bsfc, in_stream->codec, NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, isKeyFrame);
 #endif
+			fwrite(pkt.data,1,pkt.size,fp_video);
+
         } else if(pkt.stream_index == audioindex) {
             out_stream = ofmt_ctx_a->streams[0];
             ofmt_ctx = ofmt_ctx_a;
@@ -177,6 +193,7 @@ end:
 	avformat_free_context(ofmt_ctx_a);
 	avformat_free_context(ofmt_ctx_v);
 
+	fclose(fp_video);
 
 	if (ret < 0 && ret != AVERROR_EOF) {
 		printf( "Error occurred.\n");
